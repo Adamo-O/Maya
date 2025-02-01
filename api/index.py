@@ -8,6 +8,24 @@ app = FastAPI(docs_url="/api/py/docs", openapi_url="/api/py/openapi.json")
 def hello_fast_api():
     return {"message": "test"}
 
+@app.get("/api/py/create_calendar_event")
+def create_calendar_event():
+    # Generate google calendar link
+    # Format date in yyyyMMdd'T'HHmmSS
+    startDate = "20220606'T'213000"
+    endDate = "20220606'T'223000"
+    baseLink = "https://calendar.google.com/calendar/render"
+    config = {
+        "action": "TEMPLATE",
+        "text": "X restaurant opens",
+        "dates": f"{startDate}/{endDate}",
+        "location": "X restaurant",
+        "details": "X restaurant opens on June 6th",
+    }
+    params = "&".join([f"{key}={value}" for key, value in config.items()])
+    google_calendar_link = f"{baseLink}?{params}"
+    return {"google_calendar_link": google_calendar_link}
+
 # def create_calendar_event(title, date):
 #     # Make API call to your backend service
 #     response = requests.post('https://your-backend-service.com/create-event', 
