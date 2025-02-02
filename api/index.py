@@ -236,8 +236,8 @@ def multi_task(
         title = prompt
     
     if date:
-        print(title,date)
-        return None
-        # return create_calendar_event(title, date)
+        # print(title,date)
+        # return None
+        return create_calendar_event(title, date)
     else:
         return {"message": "Could not extract a valid date from the response.", "raw_response": content}
