@@ -77,10 +77,11 @@ def main_route(email: Email):
         }
     }]
     
+    messages = [{"role": "user", "content": message}]
     # Use ChatGPT to process the user's request
     response = client.chat.completions.create(
         model="gpt-4o-mini",
-        messages=[{"role": "user", "content": message}],
+        messages=messages,
         tools=tools,
     )
     
@@ -90,10 +91,10 @@ def main_route(email: Email):
     tool_call = response.choices[0].message.tool_calls[0]
     args = json.loads(tool_call.function.arguments)
     
-    result = process_actions(args['title'], args['actions'])
+    result = process_actions(args['title'], args['actions'], client, message, response.choices[0].message, tools, tool_call)
     return result
 
-def process_actions(title: str, actions: list):
+def process_actions(title: str, actions: list, client: OpenAI, message, prev_message, tools, tool_call):
     # Process the actions
     print(title, actions)
     
@@ -117,14 +118,25 @@ def process_actions(title: str, actions: list):
                 continue
             
             # Not available, suggest a reply to the email AND suggest a link to day view of calendar
-            # TODO FINISH
-    
-    # TODO Check user's calendar to see if they are available
-    
-    # If available, suggest calendar event link
-    # If not available, suggest a reply to the email AND suggest a calendar event link
+            # messages.append(prev_message)
+            
+            messages = [{
+                "role": "user",
+                "content": f"{message}\n THE FOLLOWING IS EXTREMELY IMPORTANT. The user is not available on this day. Make an action to reply to the email describing that they are unavailable, and make an action to link to the specified date in Google Calendar so that they may see the conflict."
+            }]
 
-    
+            completion_2 = client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=messages,
+                tools=tools,
+            )
+            
+            # Extract the function call details
+            tool_call_2 = completion_2.choices[0].message.tool_calls[0]
+            args = json.loads(tool_call_2.function.arguments)
+            
+            return {"title": args['title'], "actions": args['actions']}
+        
     return {"title": title, "actions": actions}
 
 
