@@ -4,46 +4,54 @@ import requests
 import json
 from dotenv import load_dotenv
 import os
-from api.integrations import get_gmail_service, get_n_latest_emails
+from api.integrations import get_gmail_service, get_n_latest_emails, find_events_on_day, get_calendar_service
+from pydantic import BaseModel
 
 load_dotenv()
 app = FastAPI(docs_url="/api/py/docs", openapi_url="/api/py/openapi.json")
 
-@app.get("/api/py/main")
-def openai_test():
+class Email(BaseModel):
+    subject: str
+    from_email: str
+    text: str
+
+@app.post("/api/py/main")
+def main_route(email: Email):
     client = OpenAI(api_key=os.environ['OPENAI_API_KEY'])
     # Create a mock ChatGPT prompt
-    prompt = """With this email context in triple backticks, if you believe that the email is work taking action on, give at most three distinct actions that a user can do. 
-        If the email is an ad or a confirmation, it is not worth answering. DO NOT GIVE ACTIONS IF THERE ARE NO VALID ANSWERS
-        Only show the actions, do not give more context.
-        Make sure each action contains a link to click on and is less than 6 words. 
-        If you are making a reply, make a mailto link as a reply with some appropriate content in the body. Make sure to use the `%20` escape character for spaces.
-        If a time and/or date is mentioned, make one of the tasks mention the time and link to google calendar. All times are in Eastern Standard Time make sure to convert to UTC time before making the link.
-        Format the actions as follows <action> - <link>. Do not format the link.
-        """
+    prompt = """You are a personal assistant tasked with filtering out emails that are actionable to the user. 
+    Such emails could be:
+    - Meeting requests
+    - Emails that require a response
+    - Travel or trip information
+    - Event details
+    - Shopping lists sent by humans
+    - Links sent by humans and are not promotional
+    Emails of similar content should also be considered.
+    Some emails that should be ignored are:
+    - Emails that are promotional or are marketing emails
+    - Order confirmations
+    - Ads
+    - Emails where there is no obvious action to be taken
+    With this email context in triple backticks, if you believe that the email is work taking action on, give at most three distinct actions that a user can do. 
+    If the email is an ad or a confirmation, it is not worth answering. 
+    If the email is suggesting an action that requires going to a website, consider linking to the mentioned site with some query parameters that can help with the search. 
+    Only show the actions, do not give more context.
+    Make sure each action contains a link to click on and is less than 6 words. 
+    If you are making a reply, make a mailto link as a reply with some appropriate content in the body. Make sure to use the %20 escape character for spaces.
+    If a time and/or date is mentioned, make one of the tasks mention the time and link to google calendar. All times are in Eastern Standard Time make sure to convert to UTC time before making the link.
+    Format the actions as follows <action> - <link>. Do not format the link: 
+    """
         
-    email = """
-    Subject: Re: hello
-    From: mayaappemail@gmail.com
-    Do you want to meet tomorrow at 5 pm at my place?
-
-    On Sat, Feb 1, 2025 at 6:58 PM Maya <mayaappemail@gmail.com> wrote:
-
-    > hiiii
-    >
-    > On Sat, Feb 1, 2025 at 6:57 PM Koosha Gholipour <
-    > koosha.gholipour@gmail.com> wrote:
-    >
-    >> hi
-    >>
-    >
+    email = f"""
+    Subject: {email.subject}
+    From: {email.from_email}
+    
+    {email.text}
     """
     
     message = f"{prompt}\n```\n{email}\n```"
     
-    # TODO Check user's calendar to see if they are available
-    # If available, suggest calendar event link
-    # If not available, suggest a reply to the email AND suggest a calendar event link
     tools = [{
         "type": "function",
         "function": {
@@ -52,6 +60,7 @@ def openai_test():
             "parameters": {
                 "type": "object",
                 "properties": {
+                    "title": {"type": "string"},
                     "actions": {
                         "type": "array",
                         "items": {
@@ -81,13 +90,42 @@ def openai_test():
     tool_call = response.choices[0].message.tool_calls[0]
     args = json.loads(tool_call.function.arguments)
     
-    result = process_actions(args['actions'])
+    result = process_actions(args['title'], args['actions'])
     return result
 
-def process_actions(actions):
+def process_actions(title: str, actions: list):
     # Process the actions
-    print(actions)
-    return actions
+    print(title, actions)
+    
+    # For each action that has a google calendar link, check if the user is available
+    for action in actions:
+        if "google.com/calendar" in action["link"]:
+            # Check user's calendar to see if they are available
+            calendar_service = get_calendar_service()
+            
+            # Extract the date from the link
+            date = action["link"].split("dates=")[1].split("/")[0]
+            
+            # Extract day, month, year from date
+            year = int(date[:4])
+            month = int(date[4:6])
+            day = int(date[6:8])
+            events = find_events_on_day(calendar_service, day, month, year)
+            
+            # Available, use calendar event link as is
+            if not events:
+                continue
+            
+            # Not available, suggest a reply to the email AND suggest a link to day view of calendar
+            # TODO FINISH
+    
+    # TODO Check user's calendar to see if they are available
+    
+    # If available, suggest calendar event link
+    # If not available, suggest a reply to the email AND suggest a calendar event link
+
+    
+    return {"title": title, "actions": actions}
 
 
 @app.get("/api/py/test")
