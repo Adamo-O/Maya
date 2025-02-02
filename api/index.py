@@ -4,6 +4,7 @@ import requests
 import json
 from dotenv import load_dotenv
 import os
+from api.integrations import get_gmail_service, get_n_latest_emails
 
 load_dotenv()
 app = FastAPI(docs_url="/api/py/docs", openapi_url="/api/py/openapi.json")
@@ -144,6 +145,13 @@ def create_calendar_event(title: str, date: str):
     params = "&".join([f"{key}={value}" for key, value in config.items()])
     google_calendar_link = f"{baseLink}?{params}"
     return {"google_calendar_link": google_calendar_link}
+
+
+@app.get("/api/py/get_n_newest_emails")
+def get_n_newest_emails(n: int = 10):
+    gmail_service = get_gmail_service()
+    emails = get_n_latest_emails(gmail_service, n)
+    return emails
 
 # def create_calendar_event(title, date):
 #     # Make API call to your backend service

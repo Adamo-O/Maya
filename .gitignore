@@ -39,3 +39,7 @@ __pycache__/
 venv
 .venv
 .env
+
+# google oauth
+credentials.json
+token.json

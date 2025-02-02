@@ -2,3 +2,7 @@ fastapi==0.115.0
 uvicorn[standard]==0.30.6
 openai
 requests
+bs4
+google-api-python-client 
+google-auth-httplib2 
+google-auth-oauthlib
