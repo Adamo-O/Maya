@@ -1,9 +1,10 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Query
 from openai import OpenAI
 import requests
 import json
 from dotenv import load_dotenv
 import os
+import re 
 
 load_dotenv()
 app = FastAPI(docs_url="/api/py/docs", openapi_url="/api/py/openapi.json")
@@ -89,43 +90,43 @@ def process_actions(actions):
     return actions
 
 
-@app.get("/api/py/test")
-def openai_test():
-    client = OpenAI(api_key=os.environ['OPENAI_API_KEY'])
-    # Create a mock ChatGPT prompt
-    prompt = "Add a calendar event for the day X restaurant opens on June 6th"
+# @app.get("/api/py/test")
+# def openai_test():
+#     client = OpenAI(api_key=os.environ['OPENAI_API_KEY'])
+#     # Create a mock ChatGPT prompt
+#     prompt = "Add a calendar event for the day X restaurant opens on June 6th"
     
-    # Define the function for ChatGPT to use
-    tools = [{
-        "type": "function",
-        "function": {
-            "name": "create_calendar_event",
-            "description": "Create a new event in Google Calendar",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "title": {"type": "string"},
-                    "date": {"type": "string", "format": "date"}
-                },
-                "required": ["title", "date"]
-            }
-        }
-    }]
+#     # Define the function for ChatGPT to use
+#     tools = [{
+#         "type": "function",
+#         "function": {
+#             "name": "create_calendar_event",
+#             "description": "Create a new event in Google Calendar",
+#             "parameters": {
+#                 "type": "object",
+#                 "properties": {
+#                     "title": {"type": "string"},
+#                     "date": {"type": "string", "format": "date"}
+#                 },
+#                 "required": ["title", "date"]
+#             }
+#         }
+#     }]
     
-    # Use ChatGPT to process the user's request
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[{"role": "user", "content": prompt}],
-        tools=tools,
-    )
+#     # Use ChatGPT to process the user's request
+#     response = client.chat.completions.create(
+#         model="gpt-4o-mini",
+#         messages=[{"role": "user", "content": prompt}],
+#         tools=tools,
+#     )
     
-    print(response)
-    # Extract the function call details
-    tool_call = response.choices[0].message.tool_calls[0]
-    args = json.loads(tool_call.function.arguments)
+#     print(response)
+#     # Extract the function call details
+#     tool_call = response.choices[0].message.tool_calls[0]
+#     args = json.loads(tool_call.function.arguments)
     
-    result = create_calendar_event(args['title'], args['date']) 
-    return result
+#     result = create_calendar_event(args['title'], args['date']) 
+#     return result
 
 # @app.get("/api/py/create_calendar_event")
 def create_calendar_event(title: str, date: str):
@@ -181,3 +182,62 @@ def create_calendar_event(title: str, date: str):
 #     args = json.loads(function_call['arguments'])
 #     result = create_calendar_event(args['title'], args['date'])
 #     print(result)
+
+@app.get("/api/py/multi_task")
+def multi_task(
+    prompt: str = Query(
+        "Remind me to buy eggs on Miley Cyrus's birthday", 
+        description="Your natural language prompt describing the reminder or appointment."
+    )
+):
+    """
+    It'll take a natural language prompt (like fr example:
+      "Remind me to buy milk two weeks later" or "Book appointment coming Saturday")
+    and appends an instruction that forces the model to reply in JSON format containing
+    exactly two keys: 'title' and 'date' (in YYYY-MM-DD format). The extracted values are then
+    passed to the calendar event creation function.
+    """
+    # Setting up perplexity 
+    client = OpenAI(
+        api_key=os.environ["PERPLEXITY_API_KEY"],
+        base_url="https://api.perplexity.ai"
+    )
+    
+    # fking with instruction to force JSON output.
+    instructions = (
+        "Please reply with a JSON object containing exactly two keys: "
+        "'title' and 'date'. The 'title' should be a brief description extracted from the above prompt, "
+        "and 'date' should be the absolute date in YYYY-MM-DD format computed from any relative expressions. "
+        "Do not include any additional text."
+    )
+    
+    conversation = f"{prompt}. {instructions}"
+    
+    response = client.chat.completions.create(
+        model="sonar-pro",
+        messages=[{"role": "user", "content": conversation}],
+    )
+    
+    # Extract the response content.
+   
+    response_dict = response.to_dict() if hasattr(response, "to_dict") else response
+
+    content = response_dict["choices"][0]["message"]["content"]
+    
+    # try to parse the output as JSON.
+    try:
+        data = json.loads(content)
+        title = data.get("title", prompt)
+        date = data.get("date", "")
+    except Exception as e:
+        # Fallback: try to extract a date using regex and use the prompt as title.
+        date_match = re.search(r"(\d{4}-\d{2}-\d{2})", content)
+        date = date_match.group(1) if date_match else ""
+        title = prompt
+    
+    if date:
+        print(title,date)
+        return None
+        # return create_calendar_event(title, date)
+    else:
+        return {"message": "Could not extract a valid date from the response.", "raw_response": content}
