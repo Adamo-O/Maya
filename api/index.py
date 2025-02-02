@@ -68,6 +68,7 @@ def main_route(email: Email):
                             "properties": {
                                 "action": {"type": "string"},
                                 "link": {"type": "string"},
+                                "icon": {"type": "string"},
                             }
                         },
                         "required": ["action", "link"]
@@ -83,6 +84,7 @@ def main_route(email: Email):
         model="gpt-4o-mini",
         messages=messages,
         tools=tools,
+        temperature=0.5,
     )
     
     print(response.choices[0].message)
@@ -90,6 +92,9 @@ def main_route(email: Email):
     # Extract the function call details
     tool_call = response.choices[0].message.tool_calls[0]
     args = json.loads(tool_call.function.arguments)
+    
+    if "title" not in args or "actions" not in args:
+        return
     
     result = process_actions(args['title'], args['actions'], client, message, response.choices[0].message, tools, tool_call)
     return result
@@ -202,6 +207,22 @@ def get_n_newest_emails(n: int = 10):
     gmail_service = get_gmail_service()
     emails = get_n_latest_emails(gmail_service, n)
     return emails
+
+@app.get("/api/py/get_clean_actions")
+def get_clean_actions():
+    gmail_service = get_gmail_service()
+    emails = get_n_latest_emails(gmail_service)
+    
+    clean_actions = []
+    for email in emails:
+        email_model = Email(subject=email["subject"] if "subject" in email else "",
+                            from_email=email["from"] if "from" in email else "", 
+                            text=email["text"] if "text" in email else email["html-parsed"] if "html-parsed" in email else email["html"])
+        res = main_route(email_model)
+        if res:
+            clean_actions.append(res)
+            
+    return clean_actions
 
 # def create_calendar_event(title, date):
 #     # Make API call to your backend service

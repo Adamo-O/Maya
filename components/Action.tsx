@@ -14,7 +14,7 @@ export default function Action({
   actions: Action[];
 }) {
   return (
-    <Card className='w-fit rounded-2xl bg-zinc-800 border-zinc-300 text-white relative'>
+    <Card className='z-10 w-fit rounded-2xl bg-zinc-800 border-zinc-300 text-white relative'>
       <CardHeader className="flex flex-row items-center gap-8 space-y-0 p-0">
         <CardTitle className='mt-0 pt-0 text-2xl font-medium p-6'>{title}</CardTitle>
       </CardHeader>

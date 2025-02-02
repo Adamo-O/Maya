@@ -5,6 +5,8 @@ import Link from "next/link";
 import { motion, useMotionValueEvent, useScroll } from "motion/react";
 import Action from "@/components/Action";
 import { useEffect, useRef, useState } from "react";
+import SuggestionBubble from "@/components/SuggestionBubble";
+import {LoaderPinwheel} from "lucide-react";
 
 /* 
   1. On initial load, user will login to their Google account
@@ -14,7 +16,7 @@ import { useEffect, useRef, useState } from "react";
 
 */
 
-const exampleActions = [
+const extraactions = [
   {
     title: "Mexico trip in June",
     actions: [
@@ -70,7 +72,24 @@ const exampleActions = [
 ];
 
 export default function Home() {
-  const userName = "Adamo";
+  const [actions, setActions] = useState<{title: string, actions: {action: string, link: string}[]}[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Refetch actions every minute
+  useEffect(() => {
+    // const interval = setInterval(() => {
+      fetch("/api/py/get_clean_actions")
+        .then((res) => res.json())
+        .then((data) => {
+          setActions(data);
+          setLoading(false);
+        }
+      );
+    // }, 60000000000);
+  // }, 60000);
+
+    // return () => clearInterval(interval);
+  }, []);
 
   const containerRef = useRef(null);
   const { scrollY } = useScroll({
@@ -81,7 +100,7 @@ export default function Home() {
 
   useMotionValueEvent(scrollY, "change", (current) => {
     // Get y coordinate of each action card
-    const actionYs = exampleActions.map((_, i) => {
+    const actionYs = actions.map((_, i) => {
       const action = document.getElementById(`action-${i}`);
       return action?.getBoundingClientRect().y;
     });
@@ -99,26 +118,37 @@ export default function Home() {
   return (
     <main className="flex h-screen flex-col items-center px-24 py-12 bg-gradient-to-b from-zinc-900 bg-zinc-950 text-white">
       <div className="flex flex-col items-center w-full h-full">
-        {/* {exampleActions.filter((_, i) => i < currentActionIndex).length ===
+        {
+          loading && <div className="flex flex-col h-full items-center justify-center gap-2">
+            <LoaderPinwheel className="w-6 h-6 animate-spin" />
+            <p>Loading your integrated notifications...</p>
+            </div>
+        }
+        {/* {actions.filter((_, i) => i < currentActionIndex).length ===
           0 && <div>Good morning, {userName}.</div>} */}
         <div
           ref={containerRef}
           className="w-full overflow-y-auto overflow-x-hidden flex flex-col items-center h-full gap-20 py-80 px-6 snap-y snap-mandatory scroll-smooth"
         >
             {
-              exampleActions.map((action, index) => (
+              actions.map((action, index) => (
                 <motion.div
                   id={`action-${index}`}
                   key={index}
                   animate={{
-                    opacity: 1 - Math.abs(index - currentActionIndex) / exampleActions.length,
+                    opacity: 1 - Math.abs(index - currentActionIndex) / actions.length,
                     scale:
-                      1 - Math.abs(index - currentActionIndex) / exampleActions.length,
+                      1 - Math.abs(index - currentActionIndex) / actions.length,
                     filter: index !== currentActionIndex ? "blur(7.5px)" : "blur(0)",
                   }}
-                  className="snap-center snap-always"
+                  className="snap-center snap-always relative"
                 >
                   <Action title={action.title} actions={action.actions} />
+                  {
+                    index === currentActionIndex && action.actions.map((act, index) => (
+                      <SuggestionBubble key={index} action={act} position={index + 1} totalBubbles={action.actions.length} />
+                    ))
+                  }
                 </motion.div>
               ))
             }
